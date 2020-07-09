@@ -20,6 +20,7 @@ struct dynamic_delay_info {
 	obs_hotkey_id backward_slow_hotkey;
 	obs_hotkey_id backward_fast_hotkey;
 	obs_hotkey_id pause_hotkey;
+	bool hotkeys_loaded;
 	double max_duration;
 	double speed;
 	double start_speed;
@@ -90,7 +91,11 @@ static void dynamic_delay_destroy(void *data)
 static void dynamic_delay_update(void *data, obs_data_t *settings)
 {
 	struct dynamic_delay_info *d = data;
-	d->max_duration = obs_data_get_double(settings, S_DURATION);
+	double duration = obs_data_get_double(settings, S_DURATION);
+	if (duration < d->max_duration) {
+		free_textures(d);
+	}
+	d->max_duration = duration;
 	d->easing = obs_data_get_int(settings, S_EASING);
 	d->easing_max_duration =
 		(float)obs_data_get_double(settings, S_EASING_DURATION);
@@ -105,7 +110,7 @@ static void dynamic_delay_update(void *data, obs_data_t *settings)
 }
 
 void dynamic_delay_skip_begin_hotkey(void *data, obs_hotkey_id id,
-				       obs_hotkey_t *hotkey, bool pressed)
+				     obs_hotkey_t *hotkey, bool pressed)
 {
 	if (!pressed)
 		return;
@@ -119,7 +124,7 @@ void dynamic_delay_skip_begin_hotkey(void *data, obs_hotkey_id id,
 }
 
 void dynamic_delay_skip_end_hotkey(void *data, obs_hotkey_id id,
-				     obs_hotkey_t *hotkey, bool pressed)
+				   obs_hotkey_t *hotkey, bool pressed)
 {
 	if (!pressed)
 		return;
@@ -166,7 +171,7 @@ void dynamic_delay_fast_forward_hotkey(void *data, obs_hotkey_id id,
 }
 
 void dynamic_delay_slow_backward_hotkey(void *data, obs_hotkey_id id,
-				       obs_hotkey_t *hotkey, bool pressed)
+					obs_hotkey_t *hotkey, bool pressed)
 {
 	if (!pressed)
 		return;
@@ -177,18 +182,18 @@ void dynamic_delay_slow_backward_hotkey(void *data, obs_hotkey_id id,
 }
 
 void dynamic_delay_backward_hotkey(void *data, obs_hotkey_id id,
-				  obs_hotkey_t *hotkey, bool pressed)
+				   obs_hotkey_t *hotkey, bool pressed)
 {
 	if (!pressed)
 		return;
 	struct dynamic_delay_info *d = data;
 	d->start_speed = d->speed;
-	d->target_speed = 1.0;
+	d->target_speed = -1.0;
 	d->easing_started = 0;
 }
 
 void dynamic_delay_fast_backward_hotkey(void *data, obs_hotkey_id id,
-				       obs_hotkey_t *hotkey, bool pressed)
+					obs_hotkey_t *hotkey, bool pressed)
 {
 	if (!pressed)
 		return;
@@ -199,7 +204,7 @@ void dynamic_delay_fast_backward_hotkey(void *data, obs_hotkey_id id,
 }
 
 void dynamic_delay_pause_hotkey(void *data, obs_hotkey_id id,
-					obs_hotkey_t *hotkey, bool pressed)
+				obs_hotkey_t *hotkey, bool pressed)
 {
 	if (!pressed)
 		return;
@@ -209,7 +214,7 @@ void dynamic_delay_pause_hotkey(void *data, obs_hotkey_id id,
 	d->easing_started = 0;
 }
 
-static void dynamic_delay_load(void *data, obs_data_t *settings)
+static void dynamic_delay_load_hotkeys(void *data)
 {
 	struct dynamic_delay_info *d = data;
 	obs_source_t *parent = obs_filter_get_parent(d->source);
@@ -233,16 +238,23 @@ static void dynamic_delay_load(void *data, obs_data_t *settings)
 			parent, "backward", obs_module_text("Backward"),
 			dynamic_delay_backward_hotkey, data);
 		d->backward_slow_hotkey = obs_hotkey_register_source(
-			parent, "slow_backward", obs_module_text("SlowBackward"),
+			parent, "slow_backward",
+			obs_module_text("SlowBackward"),
 			dynamic_delay_slow_backward_hotkey, data);
 		d->backward_fast_hotkey = obs_hotkey_register_source(
-			parent, "fast_backward", obs_module_text("FastBackward"),
+			parent, "fast_backward",
+			obs_module_text("FastBackward"),
 			dynamic_delay_fast_backward_hotkey, data);
 		d->pause_hotkey = obs_hotkey_register_source(
-			parent, "pause",
-			obs_module_text("Pause"),
+			parent, "pause", obs_module_text("Pause"),
 			dynamic_delay_pause_hotkey, data);
+		d->hotkeys_loaded = true;
 	}
+}
+
+static void dynamic_delay_load(void *data, obs_data_t *settings)
+{
+	dynamic_delay_load_hotkeys(data);
 	dynamic_delay_update(data, settings);
 }
 
@@ -350,7 +362,7 @@ static obs_properties_t *dynamic_delay_properties(void *data)
 {
 	obs_properties_t *ppts = obs_properties_create();
 	obs_property_t *p = obs_properties_add_float(
-		ppts, S_DURATION, obs_module_text("Duration"), 0.0, 1000, 1.0);
+		ppts, S_DURATION, obs_module_text("Duration"), 0.0, 100.0, 1.0);
 	obs_property_float_set_suffix(p, "s");
 
 	p = obs_properties_add_list(ppts, S_EASING, obs_module_text("Easing"),
@@ -383,7 +395,7 @@ static obs_properties_t *dynamic_delay_properties(void *data)
 
 	p = obs_properties_add_float(ppts, S_EASING_DURATION,
 				     obs_module_text("EasingDuration"), 0.0,
-				     100, 1.0);
+				     10.0, 1.0);
 	obs_property_float_set_suffix(p, "s");
 
 	p = obs_properties_add_float_slider(ppts, S_SLOW_FORWARD,
@@ -445,6 +457,8 @@ static inline void check_size(struct dynamic_delay_info *d)
 static void dynamic_delay_tick(void *data, float t)
 {
 	struct dynamic_delay_info *d = data;
+	if (!d->hotkeys_loaded)
+		dynamic_delay_load_hotkeys(data);
 	d->processed_frame = false;
 	if (d->speed != d->target_speed) {
 		const uint64_t ts = obs_get_video_frame_time();

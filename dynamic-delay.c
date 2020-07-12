@@ -1,5 +1,6 @@
 #include <obs-module.h>
 #include <util/circlebuf.h>
+#include <util/dstr.h>
 #include "dynamic-delay.h"
 #include "easing.h"
 
@@ -41,7 +42,68 @@ struct dynamic_delay_info {
 	float easing_duration;
 	float easing_max_duration;
 	uint64_t easing_started;
+
+	char *text_source_name;
+	char *text_format;
 };
+
+static void replace_text(struct dstr *str, size_t pos, size_t len,
+			 const char *new_text)
+{
+	struct dstr front = {0};
+	struct dstr back = {0};
+
+	dstr_left(&front, str, pos);
+	dstr_right(&back, str, pos + len);
+	dstr_copy_dstr(str, &front);
+	dstr_cat(str, new_text);
+	dstr_cat_dstr(str, &back);
+	dstr_free(&front);
+	dstr_free(&back);
+}
+
+static void dynamic_delay_text(struct dynamic_delay_info *c)
+{
+	if (!c->text_source_name || !strlen(c->text_source_name) ||
+	    !c->text_format)
+		return;
+	obs_source_t *s = obs_get_source_by_name(c->text_source_name);
+	if (!s)
+		return;
+
+	struct dstr sf;
+	size_t pos = 0;
+	struct dstr buffer;
+	dstr_init(&buffer);
+	dstr_init_copy(&sf, c->text_format);
+	while (pos < sf.len) {
+		const char *cmp = sf.array + pos;
+		if (astrcmp_n(cmp, "%SPEED%", 7) == 0) {
+			dstr_printf(&buffer, "%.1f", c->speed * 100.0);
+			dstr_cat_ch(&buffer, '%');
+			replace_text(&sf, pos, 7, buffer.array);
+			pos += buffer.len;
+		} else if (astrcmp_n(cmp, "%TARGET%", 8) == 0) {
+			dstr_printf(&buffer, "%.1f", c->target_speed * 100.0);
+			dstr_cat_ch(&buffer, '%');
+			replace_text(&sf, pos, 8, buffer.array);
+			pos += buffer.len;
+		} else if (astrcmp_n(cmp, "%TIME%", 6) == 0) {
+			dstr_printf(&buffer, "%.1f", c->time_diff);
+			replace_text(&sf, pos, 6, buffer.array);
+			pos += buffer.len;
+		} else {
+			pos++;
+		}
+	}
+	obs_data_t *settings = obs_data_create();
+	obs_data_set_string(settings, "text", sf.array);
+	obs_source_update(s, settings);
+	obs_data_release(settings);
+	dstr_free(&sf);
+	dstr_free(&buffer);
+	obs_source_release(s);
+}
 
 static const char *dynamic_delay_get_name(void *type_data)
 {
@@ -85,6 +147,10 @@ static void dynamic_delay_destroy(void *data)
 	obs_hotkey_unregister(c->backward_fast_hotkey);
 	obs_hotkey_unregister(c->pause_hotkey);
 	free_textures(c);
+	if (c->text_source_name)
+		bfree(c->text_source_name);
+	if (c->text_format)
+		bfree(c->text_format);
 	bfree(c);
 }
 
@@ -107,6 +173,26 @@ static void dynamic_delay_update(void *data, obs_data_t *settings)
 		obs_data_get_double(settings, S_SLOW_BACKWARD) / 100.0;
 	d->fast_backward_speed =
 		obs_data_get_double(settings, S_FAST_BACKWARD) / 100.0;
+
+	const char *text_source = obs_data_get_string(settings, S_TEXT_SOURCE);
+	if (d->text_source_name) {
+		if (strcmp(d->text_source_name, text_source) != 0) {
+			bfree(d->text_source_name);
+			d->text_source_name = bstrdup(text_source);
+		}
+	} else {
+		d->text_source_name = bstrdup(text_source);
+	}
+
+	const char *text_format = obs_data_get_string(settings, S_TEXT_FORMAT);
+	if (d->text_format) {
+		if (strcmp(d->text_format, text_format) != 0) {
+			bfree(d->text_format);
+			d->text_format = bstrdup(text_format);
+		}
+	} else {
+		d->text_format = bstrdup(text_format);
+	}
 }
 
 void dynamic_delay_skip_begin_hotkey(void *data, obs_hotkey_id id,
@@ -358,6 +444,34 @@ static void dynamic_delay_video_render(void *data, gs_effect_t *effect)
 	d->processed_frame = true;
 }
 
+static bool EnumTextSources(void *data, obs_source_t *source)
+{
+	obs_property_t *prop = data;
+	const char *source_id = obs_source_get_unversioned_id(source);
+	if (strcmp(source_id, "text_gdiplus") == 0 ||
+	    strcmp(source_id, "text_ft2_source") == 0)
+		obs_property_list_add_string(prop, obs_source_get_name(source),
+					     obs_source_get_name(source));
+	return true;
+}
+
+static bool dynamic_delay_text_source_modified(obs_properties_t *props,
+					       obs_property_t *property,
+					       obs_data_t *data)
+{
+	const char *source_name = obs_data_get_string(data, S_TEXT_SOURCE);
+	bool text_source = false;
+	if (source_name) {
+		obs_source_t *s = obs_get_source_by_name(source_name);
+		if (s) {
+			text_source = true;
+		}
+	}
+	obs_property_t *prop = obs_properties_get(props, S_TEXT_FORMAT);
+	obs_property_set_visible(prop, text_source);
+	return true;
+}
+
 static obs_properties_t *dynamic_delay_properties(void *data)
 {
 	obs_properties_t *ppts = obs_properties_create();
@@ -418,6 +532,18 @@ static obs_properties_t *dynamic_delay_properties(void *data)
 					    -1000.0, -100.1, 1.0);
 	obs_property_float_set_suffix(p, "%");
 
+	p = obs_properties_add_list(ppts, S_TEXT_SOURCE,
+				    obs_module_text("TextSource"),
+				    OBS_COMBO_TYPE_EDITABLE,
+				    OBS_COMBO_FORMAT_STRING);
+	obs_property_list_add_string(p, "", "");
+	obs_enum_sources(EnumTextSources, p);
+	obs_property_set_modified_callback(p,
+					   dynamic_delay_text_source_modified);
+
+	obs_properties_add_text(ppts, S_TEXT_FORMAT,
+				obs_module_text("TextFormat"),
+				OBS_TEXT_MULTILINE);
 	return ppts;
 }
 
@@ -430,6 +556,10 @@ void dynamic_delay_defaults(obs_data_t *settings)
 	obs_data_set_default_double(settings, S_FAST_FORWARD, 200.0);
 	obs_data_set_default_double(settings, S_SLOW_BACKWARD, -50.0);
 	obs_data_set_default_double(settings, S_FAST_BACKWARD, -200.0);
+
+	obs_data_set_default_string(
+		settings, S_TEXT_FORMAT,
+		"Speed: %SPEED%%\nTarget speed: %TARGET%\nTime diff: %TIME% seconds");
 }
 
 static inline void check_size(struct dynamic_delay_info *d)
@@ -509,13 +639,14 @@ static void dynamic_delay_tick(void *data, float t)
 		d->target_speed = 1.0;
 		d->easing_started = 0;
 	}
-
-	d->time_diff += (1.0 - d->speed) * t;
-	if (d->time_diff < 0.0)
-		d->time_diff = 0.0;
-	if (d->time_diff > d->max_duration)
-		d->time_diff = d->max_duration;
-
+	double time_diff = d->time_diff;
+	time_diff += (1.0 - d->speed) * t;
+	if (time_diff < 0.0)
+		time_diff = 0.0;
+	if (time_diff > d->max_duration)
+		time_diff = d->max_duration;
+	d->time_diff = time_diff;
+	dynamic_delay_text(d);
 	check_size(d);
 }
 

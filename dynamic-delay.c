@@ -596,7 +596,8 @@ static void dynamic_delay_tick(void *data, float t)
 			d->easing_started = ts;
 		const double duration =
 			(double)(ts - d->easing_started) / 1000000000.0;
-		if (duration > d->easing_max_duration) {
+		if (duration > d->easing_max_duration ||
+		    d->easing_max_duration <= 0.0) {
 			d->speed = d->target_speed;
 		} else {
 			double t2 = duration / d->easing_max_duration;

@@ -123,36 +123,6 @@ static void free_textures(struct dynamic_delay_info *f)
 	obs_leave_graphics();
 }
 
-static void *dynamic_delay_create(obs_data_t *settings, obs_source_t *source)
-{
-	struct dynamic_delay_info *d =
-		bzalloc(sizeof(struct dynamic_delay_info));
-	d->source = source;
-	d->speed = 1.0;
-	d->target_speed = 1.0;
-	d->start_speed = 1.0;
-	return d;
-}
-
-static void dynamic_delay_destroy(void *data)
-{
-	struct dynamic_delay_info *c = data;
-	obs_hotkey_unregister(c->skip_begin_hotkey);
-	obs_hotkey_unregister(c->skip_end_hotkey);
-	obs_hotkey_unregister(c->forward_hotkey);
-	obs_hotkey_unregister(c->forward_slow_hotkey);
-	obs_hotkey_unregister(c->forward_fast_hotkey);
-	obs_hotkey_unregister(c->backward_hotkey);
-	obs_hotkey_unregister(c->backward_slow_hotkey);
-	obs_hotkey_unregister(c->backward_fast_hotkey);
-	obs_hotkey_unregister(c->pause_hotkey);
-	free_textures(c);
-	if (c->text_source_name)
-		bfree(c->text_source_name);
-	if (c->text_format)
-		bfree(c->text_format);
-	bfree(c);
-}
 
 static void dynamic_delay_update(void *data, obs_data_t *settings)
 {
@@ -193,6 +163,38 @@ static void dynamic_delay_update(void *data, obs_data_t *settings)
 	} else {
 		d->text_format = bstrdup(text_format);
 	}
+}
+
+static void *dynamic_delay_create(obs_data_t *settings, obs_source_t *source)
+{
+	struct dynamic_delay_info *d =
+		bzalloc(sizeof(struct dynamic_delay_info));
+	d->source = source;
+	d->speed = 1.0;
+	d->target_speed = 1.0;
+	d->start_speed = 1.0;
+	dynamic_delay_update(d, settings);
+	return d;
+}
+
+static void dynamic_delay_destroy(void *data)
+{
+	struct dynamic_delay_info *c = data;
+	obs_hotkey_unregister(c->skip_begin_hotkey);
+	obs_hotkey_unregister(c->skip_end_hotkey);
+	obs_hotkey_unregister(c->forward_hotkey);
+	obs_hotkey_unregister(c->forward_slow_hotkey);
+	obs_hotkey_unregister(c->forward_fast_hotkey);
+	obs_hotkey_unregister(c->backward_hotkey);
+	obs_hotkey_unregister(c->backward_slow_hotkey);
+	obs_hotkey_unregister(c->backward_fast_hotkey);
+	obs_hotkey_unregister(c->pause_hotkey);
+	free_textures(c);
+	if (c->text_source_name)
+		bfree(c->text_source_name);
+	if (c->text_format)
+		bfree(c->text_format);
+	bfree(c);
 }
 
 void dynamic_delay_skip_begin_hotkey(void *data, obs_hotkey_id id,
@@ -444,28 +446,14 @@ static void dynamic_delay_video_render(void *data, gs_effect_t *effect)
 	d->processed_frame = true;
 }
 
-static bool EnumTextSources(void *data, obs_source_t *source)
-{
-	obs_property_t *prop = data;
-	const char *source_id = obs_source_get_unversioned_id(source);
-	if (strcmp(source_id, "text_gdiplus") == 0 ||
-	    strcmp(source_id, "text_ft2_source") == 0)
-		obs_property_list_add_string(prop, obs_source_get_name(source),
-					     obs_source_get_name(source));
-	return true;
-}
-
 static bool dynamic_delay_text_source_modified(obs_properties_t *props,
 					       obs_property_t *property,
 					       obs_data_t *data)
 {
 	const char *source_name = obs_data_get_string(data, S_TEXT_SOURCE);
 	bool text_source = false;
-	if (source_name) {
-		obs_source_t *s = obs_get_source_by_name(source_name);
-		if (s) {
-			text_source = true;
-		}
+	if (source_name && strlen(source_name)) {
+		text_source = true;
 	}
 	obs_property_t *prop = obs_properties_get(props, S_TEXT_FORMAT);
 	obs_property_set_visible(prop, text_source);
@@ -532,12 +520,8 @@ static obs_properties_t *dynamic_delay_properties(void *data)
 					    -1000.0, -100.1, 1.0);
 	obs_property_float_set_suffix(p, "%");
 
-	p = obs_properties_add_list(ppts, S_TEXT_SOURCE,
-				    obs_module_text("TextSource"),
-				    OBS_COMBO_TYPE_EDITABLE,
-				    OBS_COMBO_FORMAT_STRING);
-	obs_property_list_add_string(p, "", "");
-	obs_enum_sources(EnumTextSources, p);
+	p = obs_properties_add_text(ppts, S_TEXT_SOURCE,
+				    obs_module_text("TextSource"), OBS_TEXT_DEFAULT);
 	obs_property_set_modified_callback(p,
 					   dynamic_delay_text_source_modified);
 

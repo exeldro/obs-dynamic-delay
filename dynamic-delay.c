@@ -311,7 +311,7 @@ static void dynamic_delay_load_hotkeys(void *data)
 			parent, "skip_begin", obs_module_text("SkipBegin"),
 			dynamic_delay_skip_begin_hotkey, data);
 		d->skip_end_hotkey = obs_hotkey_register_source(
-			parent, "skip_begin", obs_module_text("SkipEnd"),
+			parent, "skip_end", obs_module_text("SkipEnd"),
 			dynamic_delay_skip_end_hotkey, data);
 		d->forward_hotkey = obs_hotkey_register_source(
 			parent, "forward", obs_module_text("Forward"),

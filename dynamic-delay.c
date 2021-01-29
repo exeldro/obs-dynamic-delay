@@ -113,14 +113,15 @@ static const char *dynamic_delay_get_name(void *type_data)
 
 static void free_textures(struct dynamic_delay_info *f)
 {
-	obs_enter_graphics();
+	
 	while (f->frames.size) {
 		struct frame frame;
 		circlebuf_pop_front(&f->frames, &frame, sizeof(frame));
+		obs_enter_graphics();
 		gs_texrender_destroy(frame.render);
+		obs_leave_graphics();
 	}
 	circlebuf_free(&f->frames);
-	obs_leave_graphics();
 }
 
 
@@ -402,7 +403,7 @@ static void dynamic_delay_video_render(void *data, gs_effect_t *effect)
 	frame.render = NULL;
 	if (d->frames.size) {
 		circlebuf_peek_front(&d->frames, &frame, sizeof(frame));
-		if (ts - frame.ts <
+		if (ts > frame.ts && ts - frame.ts <
 		    (uint64_t)(d->max_duration * 1000000000.0)) {
 			frame.render = NULL;
 		} else {
@@ -464,7 +465,7 @@ static obs_properties_t *dynamic_delay_properties(void *data)
 {
 	obs_properties_t *ppts = obs_properties_create();
 	obs_property_t *p = obs_properties_add_float(
-		ppts, S_DURATION, obs_module_text("Duration"), 0.0, 100.0, 1.0);
+		ppts, S_DURATION, obs_module_text("Duration"), 0.0, 10000.0, 1.0);
 	obs_property_float_set_suffix(p, "s");
 
 	p = obs_properties_add_list(ppts, S_EASING, obs_module_text("Easing"),

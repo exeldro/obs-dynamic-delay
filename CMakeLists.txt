@@ -1,4 +1,4 @@
-project(dynamic-delay VERSION 0.1.0)
+project(dynamic-delay VERSION 0.1.1)
 set(PROJECT_FULL_NAME "Dynamic Delay")
 
 set(dynamic-delay_HEADERS

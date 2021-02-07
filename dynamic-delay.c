@@ -113,7 +113,7 @@ static const char *dynamic_delay_get_name(void *type_data)
 
 static void free_textures(struct dynamic_delay_info *f)
 {
-	
+
 	while (f->frames.size) {
 		struct frame frame;
 		circlebuf_pop_front(&f->frames, &frame, sizeof(frame));
@@ -123,7 +123,6 @@ static void free_textures(struct dynamic_delay_info *f)
 	}
 	circlebuf_free(&f->frames);
 }
-
 
 static void dynamic_delay_update(void *data, obs_data_t *settings)
 {
@@ -403,11 +402,25 @@ static void dynamic_delay_video_render(void *data, gs_effect_t *effect)
 	frame.render = NULL;
 	if (d->frames.size) {
 		circlebuf_peek_front(&d->frames, &frame, sizeof(frame));
-		if (ts > frame.ts && ts - frame.ts <
-		    (uint64_t)(d->max_duration * 1000000000.0)) {
+		if (ts > frame.ts &&
+		    ts - frame.ts <
+			    (uint64_t)(d->max_duration * 1000000000.0)) {
 			frame.render = NULL;
 		} else {
-			circlebuf_pop_front(&d->frames, &frame, sizeof(frame));
+			circlebuf_pop_front(&d->frames, NULL, sizeof(frame));
+			if (d->frames.size) {
+				struct frame next_frame;
+				circlebuf_peek_front(&d->frames, &next_frame,
+						     sizeof(next_frame));
+				if ((ts > next_frame.ts ? ts - next_frame.ts
+							: next_frame.ts - ts) >=
+				    (uint64_t)(d->max_duration *
+					       1000000000.0)) {
+					gs_texrender_destroy(frame.render);
+					circlebuf_pop_front(&d->frames, &frame,
+							    sizeof(frame));
+				}
+			}
 		}
 	}
 	if (!frame.render) {
@@ -465,7 +478,8 @@ static obs_properties_t *dynamic_delay_properties(void *data)
 {
 	obs_properties_t *ppts = obs_properties_create();
 	obs_property_t *p = obs_properties_add_float(
-		ppts, S_DURATION, obs_module_text("Duration"), 0.0, 10000.0, 1.0);
+		ppts, S_DURATION, obs_module_text("Duration"), 0.0, 10000.0,
+		1.0);
 	obs_property_float_set_suffix(p, "s");
 
 	p = obs_properties_add_list(ppts, S_EASING, obs_module_text("Easing"),
@@ -522,7 +536,8 @@ static obs_properties_t *dynamic_delay_properties(void *data)
 	obs_property_float_set_suffix(p, "%");
 
 	p = obs_properties_add_text(ppts, S_TEXT_SOURCE,
-				    obs_module_text("TextSource"), OBS_TEXT_DEFAULT);
+				    obs_module_text("TextSource"),
+				    OBS_TEXT_DEFAULT);
 	obs_property_set_modified_callback(p,
 					   dynamic_delay_text_source_modified);
 

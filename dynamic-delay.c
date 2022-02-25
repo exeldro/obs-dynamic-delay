@@ -45,6 +45,7 @@ struct dynamic_delay_info {
 
 	char *text_source_name;
 	char *text_format;
+	bool enabled;
 };
 
 static void replace_text(struct dstr *str, size_t pos, size_t len,
@@ -587,8 +588,20 @@ static inline void check_size(struct dynamic_delay_info *d)
 static void dynamic_delay_tick(void *data, float t)
 {
 	struct dynamic_delay_info *d = data;
+	bool enabled = obs_source_enabled(d->source);
+	if(enabled != d->enabled) {
+		d->enabled = enabled;
+		if(!enabled){
+			free_textures(d);
+			d->time_diff = 0.0;
+			d->speed = 1.0;
+			dynamic_delay_text(d);
+		}
+	}
 	if (!d->hotkeys_loaded)
 		dynamic_delay_load_hotkeys(data);
+	if(!enabled)
+		return;
 	d->processed_frame = false;
 	if (d->speed != d->target_speed) {
 		const uint64_t ts = obs_get_video_frame_time();

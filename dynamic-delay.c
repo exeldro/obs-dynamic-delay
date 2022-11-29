@@ -3,6 +3,7 @@
 #include <util/dstr.h>
 #include "dynamic-delay.h"
 #include "easing.h"
+#include "version.h"
 
 struct frame {
 	gs_texrender_t *render;
@@ -133,7 +134,7 @@ static void dynamic_delay_update(void *data, obs_data_t *settings)
 		free_textures(d);
 	}
 	d->max_duration = duration;
-	d->easing = obs_data_get_int(settings, S_EASING);
+	d->easing = (uint32_t)obs_data_get_int(settings, S_EASING);
 	d->easing_max_duration =
 		(float)obs_data_get_double(settings, S_EASING_DURATION);
 	d->slow_forward_speed =
@@ -201,6 +202,8 @@ static void dynamic_delay_destroy(void *data)
 void dynamic_delay_skip_begin_hotkey(void *data, obs_hotkey_id id,
 				     obs_hotkey_t *hotkey, bool pressed)
 {
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
 	if (!pressed)
 		return;
 	struct dynamic_delay_info *d = data;
@@ -215,6 +218,8 @@ void dynamic_delay_skip_begin_hotkey(void *data, obs_hotkey_id id,
 void dynamic_delay_skip_end_hotkey(void *data, obs_hotkey_id id,
 				   obs_hotkey_t *hotkey, bool pressed)
 {
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
 	if (!pressed)
 		return;
 	struct dynamic_delay_info *d = data;
@@ -229,6 +234,8 @@ void dynamic_delay_skip_end_hotkey(void *data, obs_hotkey_id id,
 void dynamic_delay_slow_forward_hotkey(void *data, obs_hotkey_id id,
 				       obs_hotkey_t *hotkey, bool pressed)
 {
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
 	if (!pressed)
 		return;
 	struct dynamic_delay_info *d = data;
@@ -240,6 +247,8 @@ void dynamic_delay_slow_forward_hotkey(void *data, obs_hotkey_id id,
 void dynamic_delay_forward_hotkey(void *data, obs_hotkey_id id,
 				  obs_hotkey_t *hotkey, bool pressed)
 {
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
 	if (!pressed)
 		return;
 	struct dynamic_delay_info *d = data;
@@ -251,6 +260,8 @@ void dynamic_delay_forward_hotkey(void *data, obs_hotkey_id id,
 void dynamic_delay_fast_forward_hotkey(void *data, obs_hotkey_id id,
 				       obs_hotkey_t *hotkey, bool pressed)
 {
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
 	if (!pressed)
 		return;
 	struct dynamic_delay_info *d = data;
@@ -262,6 +273,8 @@ void dynamic_delay_fast_forward_hotkey(void *data, obs_hotkey_id id,
 void dynamic_delay_slow_backward_hotkey(void *data, obs_hotkey_id id,
 					obs_hotkey_t *hotkey, bool pressed)
 {
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
 	if (!pressed)
 		return;
 	struct dynamic_delay_info *d = data;
@@ -273,6 +286,8 @@ void dynamic_delay_slow_backward_hotkey(void *data, obs_hotkey_id id,
 void dynamic_delay_backward_hotkey(void *data, obs_hotkey_id id,
 				   obs_hotkey_t *hotkey, bool pressed)
 {
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
 	if (!pressed)
 		return;
 	struct dynamic_delay_info *d = data;
@@ -284,6 +299,8 @@ void dynamic_delay_backward_hotkey(void *data, obs_hotkey_id id,
 void dynamic_delay_fast_backward_hotkey(void *data, obs_hotkey_id id,
 					obs_hotkey_t *hotkey, bool pressed)
 {
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
 	if (!pressed)
 		return;
 	struct dynamic_delay_info *d = data;
@@ -295,6 +312,8 @@ void dynamic_delay_fast_backward_hotkey(void *data, obs_hotkey_id id,
 void dynamic_delay_pause_hotkey(void *data, obs_hotkey_id id,
 				obs_hotkey_t *hotkey, bool pressed)
 {
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
 	if (!pressed)
 		return;
 	struct dynamic_delay_info *d = data;
@@ -385,6 +404,7 @@ static void draw_frame(struct dynamic_delay_info *d)
 
 static void dynamic_delay_video_render(void *data, gs_effect_t *effect)
 {
+	UNUSED_PARAMETER(effect);
 	struct dynamic_delay_info *d = data;
 	obs_source_t *target = obs_filter_get_target(d->source);
 	obs_source_t *parent = obs_filter_get_parent(d->source);
@@ -465,6 +485,7 @@ static bool dynamic_delay_text_source_modified(obs_properties_t *props,
 					       obs_property_t *property,
 					       obs_data_t *data)
 {
+	UNUSED_PARAMETER(property);
 	const char *source_name = obs_data_get_string(data, S_TEXT_SOURCE);
 	bool text_source = false;
 	if (source_name && strlen(source_name)) {
@@ -477,6 +498,7 @@ static bool dynamic_delay_text_source_modified(obs_properties_t *props,
 
 static obs_properties_t *dynamic_delay_properties(void *data)
 {
+	UNUSED_PARAMETER(data);
 	obs_properties_t *ppts = obs_properties_create();
 	obs_property_t *p = obs_properties_add_float(
 		ppts, S_DURATION, obs_module_text("Duration"), 0.0, 10000.0,
@@ -545,6 +567,12 @@ static obs_properties_t *dynamic_delay_properties(void *data)
 	obs_properties_add_text(ppts, S_TEXT_FORMAT,
 				obs_module_text("TextFormat"),
 				OBS_TEXT_MULTILINE);
+
+	obs_properties_add_text(
+		ppts, "plugin_info",
+		"<a href=\"https://obsproject.com/forum/resources/dynamic-delay.1035/\">Dynamic Delay</a> (" PROJECT_VERSION
+		") by <a href=\"https://www.exeldro.com\">Exeldro</a>",
+		OBS_TEXT_INFO);
 	return ppts;
 }
 
@@ -589,9 +617,9 @@ static void dynamic_delay_tick(void *data, float t)
 {
 	struct dynamic_delay_info *d = data;
 	bool enabled = obs_source_enabled(d->source);
-	if(enabled != d->enabled) {
+	if (enabled != d->enabled) {
 		d->enabled = enabled;
-		if(!enabled){
+		if (!enabled) {
 			free_textures(d);
 			d->time_diff = 0.0;
 			d->speed = 1.0;
@@ -600,7 +628,7 @@ static void dynamic_delay_tick(void *data, float t)
 	}
 	if (!d->hotkeys_loaded)
 		dynamic_delay_load_hotkeys(data);
-	if(!enabled)
+	if (!enabled)
 		return;
 	d->processed_frame = false;
 	if (d->speed != d->target_speed) {
@@ -613,7 +641,8 @@ static void dynamic_delay_tick(void *data, float t)
 		    d->easing_max_duration <= 0.0) {
 			d->speed = d->target_speed;
 		} else {
-			double t2 = duration / d->easing_max_duration;
+			AHFloat t2 =
+				(AHFloat)(duration / d->easing_max_duration);
 			if (d->easing == EASING_QUADRATIC) {
 				t2 = QuadraticEaseInOut(t2);
 			} else if (d->easing == EASING_CUBIC) {
@@ -635,8 +664,9 @@ static void dynamic_delay_tick(void *data, float t)
 			} else if (d->easing == EASING_BACK) {
 				t2 = BackEaseInOut(t2);
 			}
-			d->speed = d->start_speed +
-				   (d->target_speed - d->start_speed) * t2;
+			d->speed =
+				d->start_speed +
+				(d->target_speed - d->start_speed) * (double)t2;
 		}
 	} else if (d->easing_started) {
 		d->easing_started = 0;
@@ -664,26 +694,6 @@ static void dynamic_delay_tick(void *data, float t)
 	check_size(d);
 }
 
-void dynamic_delay_activate(void *data)
-{
-	struct dynamic_delay_info *d = data;
-}
-
-void dynamic_delay_deactivate(void *data)
-{
-	struct dynamic_delay_info *d = data;
-}
-
-void dynamic_delay_show(void *data)
-{
-	struct dynamic_delay_info *d = data;
-}
-
-void dynamic_delay_hide(void *data)
-{
-	struct dynamic_delay_info *d = data;
-}
-
 struct obs_source_info dynamic_delay_filter = {
 	.id = "dynamic_delay_filter",
 	.type = OBS_SOURCE_TYPE_FILTER,
@@ -697,10 +707,6 @@ struct obs_source_info dynamic_delay_filter = {
 	.get_properties = dynamic_delay_properties,
 	.get_defaults = dynamic_delay_defaults,
 	.video_tick = dynamic_delay_tick,
-	.activate = dynamic_delay_activate,
-	.deactivate = dynamic_delay_deactivate,
-	.show = dynamic_delay_show,
-	.hide = dynamic_delay_hide,
 };
 
 OBS_DECLARE_MODULE()
@@ -718,6 +724,7 @@ MODULE_EXPORT const char *obs_module_name(void)
 
 bool obs_module_load(void)
 {
+	blog(LOG_INFO, "[Dynamic Delay] loaded version %s", PROJECT_VERSION);
 	obs_register_source(&dynamic_delay_filter);
 	return true;
 }

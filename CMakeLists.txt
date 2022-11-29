@@ -1,14 +1,35 @@
-project(dynamic-delay VERSION 0.1.3)
+# --- Detect if the plugin is build out of tree or not ---
+if(CMAKE_PROJECT_NAME STREQUAL "obs-studio")
+  set(BUILD_OUT_OF_TREE OFF)
+else()
+  set(BUILD_OUT_OF_TREE ON)
+  cmake_minimum_required(VERSION 3.18)
+endif()
+
+project(dynamic-delay VERSION 0.1.4)
 set(PROJECT_FULL_NAME "Dynamic Delay")
 
-set(dynamic-delay_HEADERS
+# Set new UUIDs when you start to create a new plugin.
+set(MACOS_PACKAGE_UUID "F4E023FE-6E83-442F-8343-9C2003150FE7")
+set(MACOS_INSTALLER_UUID "3C028301-C6AD-4E18-AA22-088772C2F949")
+
+add_library(${PROJECT_NAME} MODULE)
+
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/version.h.in ${CMAKE_CURRENT_SOURCE_DIR}/version.h)
+
+target_sources(${PROJECT_NAME} PRIVATE
+	dynamic-delay.c
+	easing.c
 	dynamic-delay.h
 	easing.h)
-set(dynamic-delay_SOURCES
-	dynamic-delay.c
-	easing.c)
 
-if(WIN32)
+if(BUILD_OUT_OF_TREE)
+	find_package(libobs REQUIRED)
+	find_package(obs-frontend-api REQUIRED)
+	include(cmake/ObsPluginHelpers.cmake)
+endif()
+  
+if(OS_WINDOWS)
 	get_filename_component(ISS_FILES_DIR "${CMAKE_BINARY_DIR}\\..\\package" ABSOLUTE)
 	file(TO_NATIVE_PATH "${ISS_FILES_DIR}" ISS_FILES_DIR)
 	get_filename_component(ISS_PACKAGE_DIR "${CMAKE_PACKAGE_PREFIX}\\.." ABSOLUTE)
@@ -18,16 +39,34 @@ if(WIN32)
 	configure_file("installer.iss.in"
 			"${PROJECT_BINARY_DIR}/installer.iss"
 		)
-	configure_file(resource.rc.in dynamic-delay.rc)
-	list(APPEND dynamic-delay_SOURCES
-		dynamic-delay.rc)
+	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/resource.rc.in ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.rc)
+	target_sources(${PROJECT_NAME} PRIVATE 
+		${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.rc)
+elseif(OS_MACOS)
+	set(MACOS_BUNDLEID "com.exeldro.${PROJECT_NAME}")
+	set(MACOSX_PLUGIN_GUI_IDENTIFIER "${MACOS_BUNDLEID}")
+	set(MACOSX_PLUGIN_BUNDLE_VERSION "${PROJECT_VERSION}")
+	set(MACOSX_PLUGIN_SHORT_VERSION_STRING "1")
+	configure_file(cmake/bundle/macos/installer-macos.pkgproj.in ${CMAKE_BINARY_DIR}/installer-macos.generated.pkgproj)
+	target_compile_options(${PROJECT_NAME} PRIVATE -Wall)
 endif()
 
-add_library(dynamic-delay MODULE
-	${dynamic-delay_HEADERS}
-	${dynamic-delay_SOURCES})
-target_link_libraries(dynamic-delay
-	libobs)
+target_link_libraries(${PROJECT_NAME}
+	OBS::libobs)
 
-set_target_properties(dynamic-delay PROPERTIES FOLDER "plugins/exeldro")
-install_obs_plugin_with_data(dynamic-delay data)
+if(BUILD_OUT_OF_TREE)
+    if(NOT LIB_OUT_DIR)
+        set(LIB_OUT_DIR "/lib/obs-plugins")
+    endif()
+    if(NOT DATA_OUT_DIR)
+        set(DATA_OUT_DIR "/share/obs/obs-plugins/${PROJECT_NAME}")
+    endif()
+    set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "")
+    install(TARGETS ${PROJECT_NAME}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/${LIB_OUT_DIR})
+    install(DIRECTORY data/locale
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/${DATA_OUT_DIR})
+else()
+    set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER "plugins/exeldro")
+endif()
+setup_plugin_target(${PROJECT_NAME})
